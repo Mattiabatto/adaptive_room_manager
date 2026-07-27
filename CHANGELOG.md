@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.4
+
+- Added persistent storage for the last known state of every light managed by a room.
+- After Home Assistant starts, Adaptive Room Manager waits for entity restoration and then restores each managed light to its pre-restart on/off, brightness and color state.
+- Startup restoration preserves manual light changes and prevents the active Day, Evening, Night or Sleep profile from immediately overwriting a restored occupied-room state.
+- Light-state persistence is updated as managed lights change and is also flushed when the room manager unloads.
+- Kept the 0.6.3 interface, Area icons and local brand assets unchanged. The controller refactor remains deferred to 0.6.5.
+
 ## 0.6.3
 
 - Renamed the global configuration entry to `★ Home Settings` so it sorts before room entries in Home Assistant. Existing Home Settings entries are renamed automatically when the integration loads.

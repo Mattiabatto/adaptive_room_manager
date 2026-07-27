@@ -139,6 +139,14 @@ A room device exposes entities including:
 - Illuminance threshold
 - Mode
 
+## Restart-safe light state
+
+Adaptive Room Manager stores the last valid state of every light managed by each room. After Home Assistant has completed startup, the integration restores those lights to their pre-restart state, including on/off state, brightness and supported color information.
+
+This restoration is independent from the current Day, Evening or Night period. For example, if Home Assistant restarts during Night while one room light has been manually switched off and another is on at a custom brightness, those states are restored instead of immediately reapplying the full Night profile. If the room is already occupied at startup, the restored state is treated as the already-applied lighting state for that occupancy cycle.
+
+Lights that are unavailable or unknown when restoration runs are left unchanged rather than receiving an unsafe command.
+
 ## Installation with HACS
 
 1. Open HACS.
