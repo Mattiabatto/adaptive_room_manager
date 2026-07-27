@@ -1,0 +1,134 @@
+{
+  "title": "Adaptive Room Manager",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Adaptive Room Manager",
+        "description": "Choose whether to configure the home-wide schedule and defaults or add a room based on an existing Home Assistant area.",
+        "menu_options": {
+          "home": "Home Settings",
+          "room": "Room"
+        }
+      },
+      "home": {
+        "title": "Home Settings",
+        "description": "Configure the global schedule used by every room. The illuminance threshold and absence delay are copied only as starting values when a new room is created.",
+        "data": {
+          "evening_start": "Evening start",
+          "night_start": "Night start",
+          "morning_start": "Morning start",
+          "lux_threshold": "Default illuminance threshold",
+          "absence_delay": "Default absence delay"
+        },
+        "data_description": {
+          "evening_start": "Time at which every room changes from the day lighting profile to the evening lighting profile.",
+          "night_start": "Time at which every room changes to the night lighting profile. The night profile continues across midnight until Morning start.",
+          "morning_start": "Time at which every room leaves the night profile and returns to the day profile.",
+          "lux_threshold": "Initial threshold offered when a new room is added. Existing rooms keep their own threshold when this value changes.",
+          "absence_delay": "Initial delay offered when a new room is added. Existing rooms keep their own delay when this value changes."
+        }
+      },
+      "room": {
+        "title": "Add an adaptive room",
+        "description": "Select an existing Home Assistant area and configure its presence and lighting behavior. A dedicated device will be created and associated with the selected area.",
+        "data": {
+          "area_id": "Home Assistant area",
+          "trigger_presence_sensors": "Trigger presence sensors",
+          "persistent_presence_sensors": "Persistent presence sensors",
+          "lux_sensors": "Illuminance sensors",
+          "covers": "Room covers",
+          "day_lights": "Day lights",
+          "evening_lights": "Evening lights",
+          "night_lights": "Night lights",
+          "lux_threshold": "Illuminance threshold",
+          "absence_delay": "Absence delay"
+        },
+        "data_description": {
+          "area_id": "The existing Home Assistant area represented by this room. Only one Adaptive Room Manager entry can be created for each area.",
+          "trigger_presence_sensors": "Sensors allowed to trigger occupancy. A vacant room becomes occupied only when at least one trigger sensor and at least one persistent sensor are active. The same entity may be selected in both lists.",
+          "persistent_presence_sensors": "Sensors that confirm and maintain occupancy. They are required together with a trigger sensor to activate a vacant room. After activation, either an active trigger or an active persistent sensor keeps the room occupied. The same entity may be selected in both lists.",
+          "lux_sensors": "Sensors used to estimate natural room illuminance. Their average is stored only while all managed room lights are off. The integration never switches lights off temporarily to perform a lux test.",
+          "covers": "Covers used as a natural-light fallback when no stored illuminance value is available. Unavailable or unknown covers are ignored; any other state except closed is treated as open.",
+          "day_lights": "Lights controlled while the global period is Day. They turn on only when the room is occupied and the integration determines that light is needed.",
+          "evening_lights": "Lights controlled while the global period is Evening. The Evening start time is configured only in Home Settings.",
+          "night_lights": "Lights controlled while the global period is Night. The Night and Morning start times are configured only in Home Settings.",
+          "lux_threshold": "The room needs artificial light when the stored natural illuminance is below this value. This setting is specific to this room.",
+          "absence_delay": "How long all trigger and persistent sensors must remain inactive before an occupied room becomes vacant. If any configured presence sensor becomes active during the delay, the timer is cancelled."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This Home Settings entry or Home Assistant area is already managed."
+    }
+  },
+  "options": {
+    "step": {
+      "home": {
+        "title": "Home Settings",
+        "description": "Change the global schedule used by every configured room. Default threshold and delay values affect only rooms created afterwards.",
+        "data": {
+          "evening_start": "Evening start",
+          "night_start": "Night start",
+          "morning_start": "Morning start",
+          "lux_threshold": "Default illuminance threshold",
+          "absence_delay": "Default absence delay"
+        },
+        "data_description": {
+          "evening_start": "Time at which every room changes from the day lighting profile to the evening lighting profile.",
+          "night_start": "Time at which every room changes to the night lighting profile. The night profile continues across midnight until Morning start.",
+          "morning_start": "Time at which every room leaves the night profile and returns to the day profile.",
+          "lux_threshold": "Initial threshold offered when a new room is added. Changing it does not overwrite existing room settings.",
+          "absence_delay": "Initial delay offered when a new room is added. Changing it does not overwrite existing room settings."
+        }
+      },
+      "room": {
+        "title": "Room settings",
+        "description": "Configure the sensors and lights for this room. Morning, evening, and night times are inherited from Home Settings and are not duplicated here.",
+        "data": {
+          "trigger_presence_sensors": "Trigger presence sensors",
+          "persistent_presence_sensors": "Persistent presence sensors",
+          "lux_sensors": "Illuminance sensors",
+          "covers": "Room covers",
+          "day_lights": "Day lights",
+          "evening_lights": "Evening lights",
+          "night_lights": "Night lights",
+          "lux_threshold": "Illuminance threshold",
+          "absence_delay": "Absence delay"
+        },
+        "data_description": {
+          "trigger_presence_sensors": "Sensors allowed to trigger occupancy. A vacant room becomes occupied only when at least one trigger sensor and at least one persistent sensor are active. The same entity may be selected in both lists.",
+          "persistent_presence_sensors": "Sensors that confirm and maintain occupancy. After the room becomes occupied, an active sensor from either list keeps it occupied. The same entity may be selected in both lists.",
+          "lux_sensors": "Their average is stored while all managed lights are off. Managed lights are never switched off and back on to measure natural illuminance.",
+          "covers": "Used only as a fallback when no stored lux value exists. Unavailable and unknown covers are ignored; any other state except closed is considered open.",
+          "day_lights": "Lights controlled during the global Day period.",
+          "evening_lights": "Lights controlled during the global Evening period.",
+          "night_lights": "Lights controlled during the global Night period.",
+          "lux_threshold": "Artificial light is needed below this stored natural-illuminance value.",
+          "absence_delay": "After occupancy has started, all sensors in both presence lists must remain inactive for this duration before the room becomes vacant."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "presence": {"name": "Presence"},
+      "light_needed": {"name": "Light needed"}
+    },
+    "sensor": {
+      "presence_reason": {"name": "Presence reason"},
+      "light_reason": {"name": "Lighting reason"},
+      "period": {"name": "Period"},
+      "stored_natural_lux": {"name": "Stored natural illuminance"}
+    },
+    "switch": {
+      "automation": {"name": "Automation"}
+    },
+    "number": {
+      "absence_delay": {"name": "Absence delay"},
+      "lux_threshold": {"name": "Illuminance threshold"}
+    },
+    "select": {
+      "mode": {"name": "Mode"}
+    }
+  }
+}
