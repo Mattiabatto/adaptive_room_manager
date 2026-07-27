@@ -1,0 +1,579 @@
+"""Event-driven room controller."""
+from __future__ import annotations
+
+from datetime import time
+from typing import Any
+
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_COLOR_MODE,
+    ATTR_COLOR_TEMP_KELVIN,
+    ATTR_HS_COLOR,
+    ATTR_RGB_COLOR,
+    ATTR_XY_COLOR,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    STATE_CLOSED,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CONF_ABSENCE_DELAY,
+    CONF_AREA_ID,
+    CONF_COVERS,
+    CONF_DAY_LIGHTS,
+    CONF_ENTRY_TYPE,
+    CONF_EVENING_LIGHTS,
+    CONF_EVENING_START,
+    CONF_LUX,
+    CONF_LUX_THRESHOLD,
+    CONF_MORNING_START,
+    CONF_NIGHT_LIGHTS,
+    CONF_NIGHT_START,
+    CONF_PERSISTENT,
+    CONF_SLEEP_ABSENCE_DELAY,
+    CONF_SLEEP_AUTO_OFF,
+    CONF_SLEEP_BRIGHTNESS,
+    CONF_SLEEP_COLOR_MODE,
+    CONF_SLEEP_COLOR_TEMP,
+    CONF_SLEEP_LIGHT_ON,
+    CONF_SLEEP_LIGHT_PROFILES,
+    CONF_SLEEP_LIGHTS,
+    CONF_SLEEP_RESTORE_TRANSITION,
+    CONF_SLEEP_RGB_COLOR,
+    CONF_SLEEP_TRANSITION,
+    CONF_TRIGGER_PRESENCE,
+    DEFAULT_ABSENCE_DELAY,
+    DEFAULT_EVENING_START,
+    DEFAULT_LUX_THRESHOLD,
+    DEFAULT_MORNING_START,
+    DEFAULT_NIGHT_START,
+    DEFAULT_SLEEP_ABSENCE_DELAY,
+    DEFAULT_SLEEP_AUTO_OFF,
+    DEFAULT_SLEEP_RESTORE_TRANSITION,
+    DEFAULT_SLEEP_TRANSITION,
+    DOMAIN,
+    ENTRY_TYPE_HOME,
+    SLEEP_COLOR_RGB,
+    SLEEP_COLOR_TEMP,
+    STORAGE_KEY_PREFIX,
+    STORAGE_VERSION,
+)
+
+
+class RoomManager:
+    """Calculate presence and control lighting for one area."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self.hass = hass
+        self.entry = entry
+        self.listeners: list = []
+        self.callbacks: list = []
+        self.occupied = False
+        self.light_needed = False
+        self.presence_reason = "No active presence sensors"
+        self.light_reason = "Not evaluated"
+        self.sleep_reason = "Sleep mode inactive"
+        self.enabled = True
+        self.mode = "automatic"
+        self.last_natural_lux: float | None = None
+        self.auto_lights: set[str] = set()
+        self.manual_overrides: set[str] = set()
+        self.sleep_mode = False
+        self._sleep_snapshot: dict[str, dict[str, Any]] = {}
+        self._absence_cancel = None
+        self._sleep_profile_applied = False
+        self._store = Store[dict[str, Any]](
+            hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}.{entry.entry_id}"
+        )
+
+    @property
+    def config(self) -> dict:
+        return {**self.entry.data, **self.entry.options}
+
+    @property
+    def home_config(self) -> dict:
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HOME:
+                return {**entry.data, **entry.options}
+        return {}
+
+    @property
+    def area_id(self) -> str:
+        return self.entry.data[CONF_AREA_ID]
+
+    @property
+    def room_name(self) -> str:
+        area = ar.async_get(self.hass).async_get_area(self.area_id)
+        return area.name if area else self.entry.title
+
+    @property
+    def absence_delay(self) -> int:
+        return int(self.config.get(CONF_ABSENCE_DELAY, DEFAULT_ABSENCE_DELAY))
+
+    @property
+    def sleep_absence_delay_minutes(self) -> int:
+        return int(
+            self.config.get(CONF_SLEEP_ABSENCE_DELAY, DEFAULT_SLEEP_ABSENCE_DELAY)
+        )
+
+    @property
+    def current_absence_delay(self) -> int:
+        if self.sleep_mode:
+            return self.sleep_absence_delay_minutes * 60
+        return self.absence_delay
+
+    @property
+    def sleep_auto_off(self) -> bool:
+        return bool(self.config.get(CONF_SLEEP_AUTO_OFF, DEFAULT_SLEEP_AUTO_OFF))
+
+    @property
+    def lux_threshold(self) -> float:
+        return float(self.config.get(CONF_LUX_THRESHOLD, DEFAULT_LUX_THRESHOLD))
+
+    @property
+    def entities(self) -> list[str]:
+        out: list[str] = []
+        for key in (
+            CONF_TRIGGER_PRESENCE,
+            CONF_PERSISTENT,
+            CONF_LUX,
+            CONF_COVERS,
+            CONF_DAY_LIGHTS,
+            CONF_EVENING_LIGHTS,
+            CONF_NIGHT_LIGHTS,
+            CONF_SLEEP_LIGHTS,
+        ):
+            out.extend(self.config.get(key, []))
+        out.append("sun.sun")
+        return list(dict.fromkeys(out))
+
+    async def async_start(self) -> None:
+        stored = await self._store.async_load() or {}
+        self._sleep_snapshot = stored.get("snapshot", {})
+        self.sleep_mode = bool(stored.get("sleep_mode", False))
+        self.listeners.append(
+            async_track_state_change_event(self.hass, self.entities, self._state_changed)
+        )
+        await self.async_evaluate()
+
+    async def async_stop(self) -> None:
+        for remove_listener in self.listeners:
+            remove_listener()
+        self._cancel_absence_timer()
+
+    def add_callback(self, callback_func) -> None:
+        self.callbacks.append(callback_func)
+
+    def remove_callback(self, callback_func) -> None:
+        if callback_func in self.callbacks:
+            self.callbacks.remove(callback_func)
+
+    @callback
+    def _state_changed(self, event) -> None:
+        self.hass.async_create_task(self.async_evaluate(event.data.get("entity_id")))
+
+    def _is_active(self, entity_id: str) -> bool:
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state.lower() not in (
+            "off", "closed", STATE_UNAVAILABLE, STATE_UNKNOWN,
+            "idle", "standby", "none", "0",
+        )
+
+    def _active_presence(self) -> tuple[list[str], list[str]]:
+        triggers = [
+            entity_id
+            for entity_id in self.config.get(CONF_TRIGGER_PRESENCE, [])
+            if self._is_active(entity_id)
+        ]
+        persistent = [
+            entity_id
+            for entity_id in self.config.get(CONF_PERSISTENT, [])
+            if self._is_active(entity_id)
+        ]
+        return triggers, persistent
+
+    def _all_lights(self) -> set[str]:
+        return set(
+            self.config.get(CONF_DAY_LIGHTS, [])
+            + self.config.get(CONF_EVENING_LIGHTS, [])
+            + self.config.get(CONF_NIGHT_LIGHTS, [])
+            + self.config.get(CONF_SLEEP_LIGHTS, [])
+        )
+
+    def _lights_on(self) -> set[str]:
+        return {
+            entity_id
+            for entity_id in self._all_lights()
+            if (state := self.hass.states.get(entity_id)) and state.state == STATE_ON
+        }
+
+    def period(self) -> str:
+        if self.mode.startswith("force_"):
+            return self.mode.removeprefix("force_")
+        now = dt_util.now().time()
+        home = self.home_config
+        morning = time.fromisoformat(home.get(CONF_MORNING_START, DEFAULT_MORNING_START))
+        evening = time.fromisoformat(home.get(CONF_EVENING_START, DEFAULT_EVENING_START))
+        night = time.fromisoformat(home.get(CONF_NIGHT_START, DEFAULT_NIGHT_START))
+        if now >= night or now < morning:
+            return "night"
+        if now >= evening:
+            return "evening"
+        return "day"
+
+    def _cancel_absence_timer(self) -> None:
+        if self._absence_cancel:
+            self._absence_cancel()
+            self._absence_cancel = None
+
+    async def _save_sleep_state(self) -> None:
+        await self._store.async_save(
+            {"sleep_mode": self.sleep_mode, "snapshot": self._sleep_snapshot}
+        )
+
+    def _capture_one_light(self, entity_id: str) -> dict[str, Any] | None:
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        attrs = state.attributes
+        return {
+            "state": state.state,
+            ATTR_BRIGHTNESS: attrs.get(ATTR_BRIGHTNESS),
+            ATTR_COLOR_MODE: attrs.get(ATTR_COLOR_MODE),
+            ATTR_RGB_COLOR: attrs.get(ATTR_RGB_COLOR),
+            ATTR_XY_COLOR: attrs.get(ATTR_XY_COLOR),
+            ATTR_HS_COLOR: attrs.get(ATTR_HS_COLOR),
+            ATTR_COLOR_TEMP_KELVIN: attrs.get(ATTR_COLOR_TEMP_KELVIN),
+        }
+
+    def _lights_changed_by_sleep_profile(self) -> set[str]:
+        """Return only lights for which sleep mode will issue a command.
+
+        Sleep lights configured ON are considered changed because brightness/color may
+        be adjusted. Lights configured OFF, and normal lights excluded from the sleep
+        profile, are included only when currently ON.
+        """
+        profiles = self.config.get(CONF_SLEEP_LIGHT_PROFILES, {})
+        sleep_lights = set(self.config.get(CONF_SLEEP_LIGHTS, []))
+        changed: set[str] = set()
+        for entity_id in self._all_lights():
+            state = self.hass.states.get(entity_id)
+            is_on = state is not None and state.state == STATE_ON
+            profile = profiles.get(entity_id, {})
+            target_on = entity_id in sleep_lights and profile.get(
+                CONF_SLEEP_LIGHT_ON, True
+            )
+            if target_on or is_on:
+                changed.add(entity_id)
+        return changed
+
+    def _capture_sleep_snapshot(self) -> dict[str, dict[str, Any]]:
+        snapshot: dict[str, dict[str, Any]] = {}
+        for entity_id in self._lights_changed_by_sleep_profile():
+            saved = self._capture_one_light(entity_id)
+            if saved is not None:
+                snapshot[entity_id] = saved
+        return snapshot
+
+    async def async_set_sleep_mode(self, enabled: bool) -> None:
+        if enabled == self.sleep_mode:
+            return
+        self._cancel_absence_timer()
+        if enabled:
+            await self._enter_sleep_mode()
+        else:
+            await self._exit_sleep_mode()
+        await self.async_evaluate()
+
+    async def _enter_sleep_mode(self) -> None:
+        self.sleep_mode = True
+        # Snapshot only entities that will actually receive a sleep-mode command.
+        self._sleep_snapshot = self._capture_sleep_snapshot()
+        self.sleep_reason = "Enabled by the room Sleep mode switch"
+        await self._save_sleep_state()
+        await self._apply_sleep_profile()
+        self._sleep_profile_applied = True
+
+    async def _exit_sleep_mode(self) -> None:
+        self.sleep_mode = False
+        self.sleep_reason = "Sleep mode inactive"
+        self._sleep_profile_applied = False
+        self._update_presence(schedule_timer=False)
+        self._update_light_need()
+
+        if self.occupied and self.light_needed:
+            await self._restore_light_snapshot()
+            self.light_reason = "Restored pre-sleep state of changed lights"
+        else:
+            await self._turn_off_all_lights(
+                float(self.config.get(
+                    CONF_SLEEP_RESTORE_TRANSITION,
+                    DEFAULT_SLEEP_RESTORE_TRANSITION,
+                ))
+            )
+            self.light_reason = "Sleep ended; lighting not needed"
+
+        self._sleep_snapshot = {}
+        await self._save_sleep_state()
+
+    async def _apply_sleep_profile(self) -> None:
+        profiles = self.config.get(CONF_SLEEP_LIGHT_PROFILES, {})
+        sleep_lights = set(self.config.get(CONF_SLEEP_LIGHTS, []))
+        transition = float(
+            self.config.get(CONF_SLEEP_TRANSITION, DEFAULT_SLEEP_TRANSITION)
+        )
+
+        # Do not send turn_off to lights that are already off. This keeps the
+        # snapshot limited to lights whose state/profile is actually changed.
+        to_off = {
+            entity_id
+            for entity_id in self._all_lights()
+            if (state := self.hass.states.get(entity_id))
+            and state.state == STATE_ON
+            and not (
+                entity_id in sleep_lights
+                and profiles.get(entity_id, {}).get(CONF_SLEEP_LIGHT_ON, True)
+            )
+        }
+        if to_off:
+            await self.hass.services.async_call(
+                "light", "turn_off",
+                {ATTR_ENTITY_ID: list(to_off), "transition": transition},
+                blocking=False,
+            )
+
+        for entity_id in sleep_lights:
+            profile = profiles.get(entity_id, {})
+            if not profile.get(CONF_SLEEP_LIGHT_ON, True):
+                continue
+            data: dict[str, Any] = {
+                ATTR_ENTITY_ID: entity_id,
+                "transition": transition,
+            }
+            brightness_pct = profile.get(CONF_SLEEP_BRIGHTNESS)
+            if brightness_pct is not None:
+                data["brightness_pct"] = int(brightness_pct)
+            color_mode = profile.get(CONF_SLEEP_COLOR_MODE)
+            if color_mode == SLEEP_COLOR_RGB and profile.get(CONF_SLEEP_RGB_COLOR):
+                data[ATTR_RGB_COLOR] = profile[CONF_SLEEP_RGB_COLOR]
+            elif color_mode == SLEEP_COLOR_TEMP and profile.get(CONF_SLEEP_COLOR_TEMP):
+                data[ATTR_COLOR_TEMP_KELVIN] = int(profile[CONF_SLEEP_COLOR_TEMP])
+            await self.hass.services.async_call("light", "turn_on", data, blocking=False)
+
+    async def _restore_light_snapshot(self) -> None:
+        transition = float(
+            self.config.get(
+                CONF_SLEEP_RESTORE_TRANSITION, DEFAULT_SLEEP_RESTORE_TRANSITION
+            )
+        )
+        for entity_id, saved in self._sleep_snapshot.items():
+            if saved.get("state") != STATE_ON:
+                await self.hass.services.async_call(
+                    "light", "turn_off",
+                    {ATTR_ENTITY_ID: entity_id, "transition": transition},
+                    blocking=False,
+                )
+                continue
+            data: dict[str, Any] = {
+                ATTR_ENTITY_ID: entity_id,
+                "transition": transition,
+            }
+            if saved.get(ATTR_BRIGHTNESS) is not None:
+                data[ATTR_BRIGHTNESS] = saved[ATTR_BRIGHTNESS]
+            color_mode = saved.get(ATTR_COLOR_MODE)
+            if saved.get(ATTR_RGB_COLOR) is not None and color_mode in (
+                "rgb", "rgbw", "rgbww"
+            ):
+                data[ATTR_RGB_COLOR] = saved[ATTR_RGB_COLOR]
+            elif saved.get(ATTR_XY_COLOR) is not None and color_mode == "xy":
+                data[ATTR_XY_COLOR] = saved[ATTR_XY_COLOR]
+            elif saved.get(ATTR_HS_COLOR) is not None and color_mode == "hs":
+                data[ATTR_HS_COLOR] = saved[ATTR_HS_COLOR]
+            elif saved.get(ATTR_COLOR_TEMP_KELVIN) is not None:
+                data[ATTR_COLOR_TEMP_KELVIN] = saved[ATTR_COLOR_TEMP_KELVIN]
+            await self.hass.services.async_call("light", "turn_on", data, blocking=False)
+
+    async def _turn_off_all_lights(self, transition: float = 0) -> None:
+        lights = self._all_lights()
+        if not lights:
+            return
+        data: dict[str, Any] = {ATTR_ENTITY_ID: list(lights)}
+        if transition > 0:
+            data["transition"] = transition
+        await self.hass.services.async_call("light", "turn_off", data, blocking=False)
+        self.auto_lights.clear()
+
+    async def _handle_vacant(self) -> None:
+        """Apply vacancy behavior, including optional automatic sleep-mode exit."""
+        self.manual_overrides.clear()
+        if self.sleep_mode:
+            await self._turn_off_all_lights(
+                float(self.config.get(CONF_SLEEP_TRANSITION, DEFAULT_SLEEP_TRANSITION))
+            )
+            if self.sleep_auto_off:
+                # Keep the snapshot until _exit_sleep_mode has made its occupied/light
+                # decision. As the room is vacant, it will switch all lights off and
+                # then clear the snapshot without restoring it.
+                await self.async_set_sleep_mode(False)
+                return
+        else:
+            await self.async_apply()
+        self._notify()
+
+    def _update_presence(self, *, schedule_timer: bool = True) -> None:
+        triggers, persistent = self._active_presence()
+
+        if not self.occupied:
+            self._cancel_absence_timer()
+            if triggers and persistent:
+                self.occupied = True
+                self.presence_reason = (
+                    f"Activated by trigger {triggers[0]} and persistent {persistent[0]}"
+                )
+                if self.sleep_mode:
+                    self.hass.async_create_task(self._apply_sleep_profile())
+                    self._sleep_profile_applied = True
+            elif triggers:
+                self.presence_reason = "Waiting for a persistent presence sensor"
+            elif persistent:
+                self.presence_reason = "Waiting for a trigger presence sensor"
+            else:
+                self.presence_reason = "No active presence sensors"
+            return
+
+        if triggers or persistent:
+            self._cancel_absence_timer()
+            if triggers and persistent:
+                self.presence_reason = (
+                    f"Held by trigger {triggers[0]} and persistent {persistent[0]}"
+                )
+            elif triggers:
+                self.presence_reason = f"Held by trigger {triggers[0]}"
+            else:
+                self.presence_reason = f"Held by persistent {persistent[0]}"
+            return
+
+        if not schedule_timer:
+            return
+        if self._absence_cancel:
+            self.presence_reason = (
+                "Sleep absence delay" if self.sleep_mode else "Vacancy delay"
+            )
+            return
+
+        delay = self.current_absence_delay
+        self.presence_reason = (
+            "Sleep absence delay" if self.sleep_mode else "Vacancy delay"
+        )
+
+        @callback
+        def clear_presence(_now) -> None:
+            self._absence_cancel = None
+            current_triggers, current_persistent = self._active_presence()
+            if current_triggers or current_persistent:
+                self.hass.async_create_task(self.async_evaluate())
+                return
+            self.occupied = False
+            self.presence_reason = (
+                "Sleep absence delay expired"
+                if self.sleep_mode
+                else "Absence delay expired"
+            )
+            self.hass.async_create_task(self._handle_vacant())
+
+        self._absence_cancel = async_call_later(self.hass, delay, clear_presence)
+
+    def _update_light_need(self) -> None:
+        lights_on = self._lights_on()
+        lux_values: list[float] = []
+        for entity_id in self.config.get(CONF_LUX, []):
+            state = self.hass.states.get(entity_id)
+            try:
+                lux_values.append(float(state.state))
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+        if not lights_on and lux_values:
+            self.last_natural_lux = sum(lux_values) / len(lux_values)
+
+        valid_covers = []
+        for entity_id in self.config.get(CONF_COVERS, []):
+            state = self.hass.states.get(entity_id)
+            if state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                valid_covers.append(state)
+        any_open = any(state.state != STATE_CLOSED for state in valid_covers)
+
+        sun = self.hass.states.get("sun.sun")
+        try:
+            elevation = float(sun.attributes.get("elevation", 0)) if sun else 0
+        except (TypeError, ValueError):
+            elevation = 0
+
+        period = self.period()
+        if period == "night":
+            self.light_needed = True
+            self.light_reason = "Night profile"
+        elif self.last_natural_lux is not None:
+            self.light_needed = self.last_natural_lux < self.lux_threshold
+            self.light_reason = f"Stored natural lux: {self.last_natural_lux:.1f} lx"
+        else:
+            self.light_needed = not (any_open and elevation > 3)
+            self.light_reason = "Cover and sun fallback"
+
+    async def async_evaluate(self, changed: str | None = None) -> None:
+        was_occupied = self.occupied
+        self._update_presence()
+        self._update_light_need()
+
+        if self.sleep_mode:
+            self.sleep_reason = "Enabled by the room Sleep mode switch"
+            if self.occupied and (not was_occupied or not self._sleep_profile_applied):
+                await self._apply_sleep_profile()
+                self._sleep_profile_applied = True
+        else:
+            await self.async_apply()
+
+        self._notify()
+
+    async def async_apply(self) -> None:
+        if not self.enabled or self.mode == "disabled" or self.sleep_mode:
+            return
+
+        groups = {
+            "day": CONF_DAY_LIGHTS,
+            "evening": CONF_EVENING_LIGHTS,
+            "night": CONF_NIGHT_LIGHTS,
+        }
+        desired = (
+            set(self.config.get(groups[self.period()], []))
+            if self.occupied and self.light_needed
+            else set()
+        )
+        currently_on = self._lights_on()
+        to_on = (desired - currently_on) - self.manual_overrides
+        to_off = (self.auto_lights - desired) - self.manual_overrides
+
+        if to_on:
+            await self.hass.services.async_call(
+                "light", "turn_on", {ATTR_ENTITY_ID: list(to_on)}, blocking=False
+            )
+            self.auto_lights.update(to_on)
+        if to_off:
+            await self.hass.services.async_call(
+                "light", "turn_off", {ATTR_ENTITY_ID: list(to_off)}, blocking=False
+            )
+            self.auto_lights.difference_update(to_off)
+
+    def _notify(self) -> None:
+        for callback_func in list(self.callbacks):
+            callback_func()
