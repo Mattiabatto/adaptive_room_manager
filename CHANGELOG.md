@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Fixed saving Home Settings and room options on Home Assistant versions that reject config entry update listeners together with `OptionsFlowWithReload`.
+- Changed the options flow to the standard `OptionsFlow`, retaining the existing update listener so Home Settings changes still reload all room entries and re-register the Morning, Evening and Night schedules.
+- No lighting, presence, lux or Sleep mode behavior was otherwise changed from 0.6.1.
+
 ## 0.6.1
 
 - Changed normal lighting to a one-shot profile per occupancy cycle: after ARM applies the Day, Evening or Night profile, later evaluations no longer resend `light.turn_on`.
