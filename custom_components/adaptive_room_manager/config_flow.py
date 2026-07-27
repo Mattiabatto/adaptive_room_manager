@@ -23,7 +23,7 @@ from .const import (
     CONF_NIGHT_LIGHTS,
     CONF_NIGHT_START,
     CONF_PERSISTENT,
-    CONF_TEMPORARY,
+    CONF_TRIGGER_PRESENCE,
     DEFAULT_ABSENCE_DELAY,
     DEFAULT_EVENING_START,
     DEFAULT_LUX_THRESHOLD,
@@ -90,7 +90,7 @@ def _room_schema(defaults: dict[str, Any], *, include_area: bool) -> vol.Schema:
     fields.update(
         {
             vol.Optional(
-                CONF_TEMPORARY, default=defaults.get(CONF_TEMPORARY, [])
+                CONF_TRIGGER_PRESENCE, default=defaults.get(CONF_TRIGGER_PRESENCE, [])
             ): selector.EntitySelector(selector.EntitySelectorConfig(multiple=True)),
             vol.Optional(
                 CONF_PERSISTENT, default=defaults.get(CONF_PERSISTENT, [])
@@ -162,7 +162,7 @@ def _home_defaults(hass) -> dict[str, Any]:
 class AdaptiveRoomManagerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure Adaptive Room Manager."""
 
-    VERSION = 3
+    VERSION = 4
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -223,21 +223,32 @@ class AdaptiveRoomManagerOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        current = {**self.config_entry.data, **self.config_entry.options}
+        """Route to the correct options form for this config entry."""
         entry_type = self.config_entry.data.get(CONF_ENTRY_TYPE, ENTRY_TYPE_ROOM)
+        if entry_type == ENTRY_TYPE_HOME:
+            return await self.async_step_home(user_input)
+        return await self.async_step_room(user_input)
 
+    async def async_step_home(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit global Home Settings."""
+        current = {**self.config_entry.data, **self.config_entry.options}
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-
-        if entry_type == ENTRY_TYPE_HOME:
-            return self.async_show_form(
-                step_id="init",
-                data_schema=_home_schema(current),
-                description_placeholders={"entry_type": "home"},
-            )
-
         return self.async_show_form(
-            step_id="init",
+            step_id="home",
+            data_schema=_home_schema(current),
+        )
+
+    async def async_step_room(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit settings for one room."""
+        current = {**self.config_entry.data, **self.config_entry.options}
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+        return self.async_show_form(
+            step_id="room",
             data_schema=_room_schema(current, include_area=False),
-            description_placeholders={"entry_type": "room"},
         )

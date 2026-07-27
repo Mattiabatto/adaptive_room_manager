@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Renamed `temporary_presence` to `trigger_presence_sensors`.
+- Renamed the stored persistent presence key to `persistent_presence_sensors`.
+- Added automatic config-entry migration from version 0.3.x.
+- Changed vacant-to-occupied activation to require at least one active trigger sensor **and** at least one active persistent sensor.
+- Allowed the same entity to be configured in both presence groups and satisfy both activation conditions.
+- Kept an occupied room active while at least one sensor from either presence group remains active.
+- Started the absence delay only after every trigger and persistent sensor becomes inactive.
+- Added detailed field descriptions to room creation, room options, Home Settings creation, and Home Settings options.
+- Split Home Settings and Room options into separately translated flows.
+- Rewrote the README with the full presence state machine, lux behavior, installation, migration, and update instructions.
+
 ## 0.3.1
 
 - Removed morning, evening, and night schedule fields from room creation and room options.

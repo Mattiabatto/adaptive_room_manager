@@ -8,12 +8,38 @@ from homeassistant.helpers import area_registry as ar, device_registry as dr
 from .const import (
     CONF_AREA_ID,
     CONF_ENTRY_TYPE,
+    CONF_LEGACY_PERSISTENT,
+    CONF_LEGACY_TEMPORARY,
+    CONF_PERSISTENT,
+    CONF_TRIGGER_PRESENCE,
     DOMAIN,
     ENTRY_TYPE_HOME,
     ENTRY_TYPE_ROOM,
     PLATFORMS,
 )
 from .manager import RoomManager
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate legacy presence option names to version 4."""
+    if entry.version > 4:
+        return False
+
+    if entry.version < 4:
+        data = dict(entry.data)
+        options = dict(entry.options)
+        for values in (data, options):
+            if CONF_LEGACY_TEMPORARY in values:
+                values.setdefault(CONF_TRIGGER_PRESENCE, values.pop(CONF_LEGACY_TEMPORARY))
+            if CONF_LEGACY_PERSISTENT in values:
+                values.setdefault(CONF_PERSISTENT, values.pop(CONF_LEGACY_PERSISTENT))
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=4,
+        )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

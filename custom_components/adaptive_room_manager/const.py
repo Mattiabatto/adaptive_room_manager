@@ -12,8 +12,11 @@ ENTRY_TYPE_ROOM = "room"
 HOME_UNIQUE_ID = "home_settings"
 
 CONF_AREA_ID = "area_id"
-CONF_TEMPORARY = "temporary_presence"
-CONF_PERSISTENT = "persistent_presence"
+CONF_TRIGGER_PRESENCE = "trigger_presence_sensors"
+CONF_PERSISTENT = "persistent_presence_sensors"
+# Legacy keys used only by config-entry migration.
+CONF_LEGACY_TEMPORARY = "temporary_presence"
+CONF_LEGACY_PERSISTENT = "persistent_presence"
 CONF_LUX = "lux_sensors"
 CONF_COVERS = "covers"
 CONF_DAY_LIGHTS = "day_lights"
