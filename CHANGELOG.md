@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+- Renamed the global configuration entry to `★ Home Settings` so it sorts before room entries in Home Assistant. Existing Home Settings entries are renamed automatically when the integration loads.
+- Room entities now use the icon configured on their linked Home Assistant Area.
+- Added local integration brand icons for light and dark themes, including high-resolution variants.
+- Kept the 0.6.2 Options Flow reload fix and all 0.6.1 room behavior unchanged.
+
 ## 0.6.2
 
 - Fixed saving Home Settings and room options on Home Assistant versions that reject config entry update listeners together with `OptionsFlowWithReload`.

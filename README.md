@@ -175,3 +175,11 @@ When a vacant room becomes occupied and lighting is needed, Adaptive Room Manage
 If a user switches off one of those lights while the room remains occupied, the integration leaves it off during later presence, lux, cover and light-state updates. The lighting cycle resets only after all presence is lost, the applicable absence delay expires, and the room becomes vacant. On the next valid occupancy activation, the current profile can be applied again.
 
 An enabled period-transition synchronization option is an intentional exception: entering Day, Evening or Night may synchronize the newly selected profile. Sleep Mode also retains its own explicit enter/exit behavior.
+
+## Home Assistant UI integration
+
+Adaptive Room Manager names the global entry **★ Home Settings** so it appears before alphabetically sorted room entries. Existing installations are updated automatically when the integration loads.
+
+Every entity created for a room uses the icon configured on the linked Home Assistant Area. If the Area has no icon, Home Assistant falls back to the entity domain or device-class icon.
+
+The integration ships local light- and dark-theme brand icons in `custom_components/adaptive_room_manager/brand/`. These are supported by Home Assistant 2026.3 and newer.

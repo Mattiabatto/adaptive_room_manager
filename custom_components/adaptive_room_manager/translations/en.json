@@ -1,0 +1,228 @@
+{
+  "title": "Adaptive Room Manager",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Adaptive Room Manager",
+        "description": "Create the global Home Settings entry or add a room linked to an existing Home Assistant area.",
+        "menu_options": {
+          "home": "Home Settings",
+          "room": "Room"
+        }
+      },
+      "home": {
+        "title": "Home Settings",
+        "description": "Set the schedules and defaults shared by every room. Room-specific options do not duplicate these times.",
+        "data": {
+          "evening_start": "Evening starts",
+          "night_start": "Night starts",
+          "morning_start": "Morning starts",
+          "lux_threshold": "Default illuminance threshold",
+          "absence_delay": "Default absence delay"
+        },
+        "data_description": {
+          "evening_start": "Start of the global Evening lighting period.",
+          "night_start": "Start of the global Night lighting period.",
+          "morning_start": "End of the global Night period and start of Day.",
+          "lux_threshold": "Initial threshold copied to newly created rooms.",
+          "absence_delay": "Initial absence delay copied to newly created rooms."
+        }
+      },
+      "room": {
+        "title": "Room settings",
+        "description": "Configure presence, natural-light inputs and normal lighting profiles for this room. Sleep mode is configured from the separate Sleep settings page.",
+        "data": {
+          "area_id": "Home Assistant area",
+          "trigger_presence_sensors": "Trigger presence sensors",
+          "persistent_presence_sensors": "Persistent presence sensors",
+          "lux_sensors": "Illuminance sensors",
+          "covers": "Room covers",
+          "day_lights": "Day lights",
+          "evening_lights": "Evening lights",
+          "night_lights": "Night lights",
+          "lux_threshold": "Illuminance threshold",
+          "absence_delay": "Absence delay",
+          "sync_lights_entering_day": "Synchronize lights when entering Day",
+          "sync_lights_entering_evening": "Synchronize lights when entering Evening",
+          "sync_lights_entering_night": "Synchronize lights when entering Night"
+        },
+        "data_description": {
+          "area_id": "The existing Home Assistant area represented by this room device.",
+          "trigger_presence_sensors": "A vacant room becomes occupied only when at least one trigger sensor AND at least one persistent sensor are active. The same entity may be selected in both lists.",
+          "persistent_presence_sensors": "These sensors confirm the initial occupancy and then keep an occupied room occupied. After activation, either an active trigger or an active persistent sensor is sufficient to hold occupancy.",
+          "lux_sensors": "Their average is stored while all managed lights are off. Lights are never switched off temporarily to obtain a lux measurement.",
+          "covers": "Fallback input when no stored lux value exists. Unavailable and unknown covers are ignored; any valid state other than closed is considered open.",
+          "day_lights": "Lights automatically used during the global Day period.",
+          "evening_lights": "Lights automatically used during the global Evening period.",
+          "night_lights": "Lights automatically used during the global Night period.",
+          "lux_threshold": "Artificial light is considered necessary below this stored natural-illuminance value.",
+          "absence_delay": "Once occupied, every trigger and persistent sensor must remain inactive for this duration before the room becomes vacant.",
+          "sync_lights_entering_day": "At the Night-to-Day transition, turn off managed lights that are not in the Day profile and turn on missing Day lights when the room is occupied and needs light.",
+          "sync_lights_entering_evening": "At the Day-to-Evening transition, turn off managed lights that are not in the Evening profile and turn on missing Evening lights when the room is occupied and needs light.",
+          "sync_lights_entering_night": "At the Evening-to-Night transition, turn off managed lights that are not in the Night profile and turn on missing Night lights when the room is occupied and needs light."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This Home Settings entry or room area is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Room options",
+        "description": "Choose which group of room settings to edit.",
+        "menu_options": {
+          "room": "Room lighting",
+          "sleep_settings": "Sleep mode"
+        }
+      },
+      "home": {
+        "title": "Home Settings",
+        "description": "These schedules are shared by all rooms.",
+        "data": {
+          "evening_start": "Evening starts",
+          "night_start": "Night starts",
+          "morning_start": "Morning starts",
+          "lux_threshold": "Default illuminance threshold",
+          "absence_delay": "Default absence delay"
+        },
+        "data_description": {
+          "evening_start": "Start of the global Evening lighting period.",
+          "night_start": "Start of the global Night lighting period.",
+          "morning_start": "End of the global Night period and start of Day.",
+          "lux_threshold": "Initial threshold for rooms created later. Existing room thresholds are not overwritten.",
+          "absence_delay": "Initial delay for rooms created later. Existing room delays are not overwritten."
+        }
+      },
+      "room": {
+        "title": "Presence and normal lighting",
+        "description": "Configure the normal room controller. Global schedule times remain in Home Settings.",
+        "data": {
+          "trigger_presence_sensors": "Trigger presence sensors",
+          "persistent_presence_sensors": "Persistent presence sensors",
+          "lux_sensors": "Illuminance sensors",
+          "covers": "Room covers",
+          "day_lights": "Day lights",
+          "evening_lights": "Evening lights",
+          "night_lights": "Night lights",
+          "lux_threshold": "Illuminance threshold",
+          "absence_delay": "Absence delay",
+          "sync_lights_entering_day": "Synchronize lights when entering Day",
+          "sync_lights_entering_evening": "Synchronize lights when entering Evening",
+          "sync_lights_entering_night": "Synchronize lights when entering Night"
+        },
+        "data_description": {
+          "trigger_presence_sensors": "Required to start occupancy. A vacant room needs at least one active trigger AND one active persistent sensor. One entity may be placed in both lists.",
+          "persistent_presence_sensors": "Required to confirm the start of occupancy. Once occupied, an active sensor from either list keeps the room occupied.",
+          "lux_sensors": "Natural illuminance is sampled only while every managed light is off and the latest valid average is retained.",
+          "covers": "Used only as a fallback when no retained lux value is available. Unavailable covers are ignored.",
+          "day_lights": "Normal lights for the global Day period.",
+          "evening_lights": "Normal lights for the global Evening period.",
+          "night_lights": "Normal lights for the global Night period.",
+          "lux_threshold": "The room needs artificial light below this retained natural-lux value.",
+          "absence_delay": "How long both presence groups must remain completely inactive before occupancy clears.",
+          "sync_lights_entering_day": "At the Night-to-Day transition, turn off managed lights that are not in the Day profile and turn on missing Day lights when the room is occupied and needs light.",
+          "sync_lights_entering_evening": "At the Day-to-Evening transition, turn off managed lights that are not in the Evening profile and turn on missing Evening lights when the room is occupied and needs light.",
+          "sync_lights_entering_night": "At the Evening-to-Night transition, turn off managed lights that are not in the Night profile and turn on missing Night lights when the room is occupied and needs light."
+        }
+      },
+      "sleep_settings": {
+        "title": "Sleep mode",
+        "description": "Configure the room-owned Sleep mode switch, the longer vacancy delay used while it is on, and the per-light sleep profile. Use a Home Assistant automation to control the exposed Sleep mode switch.",
+        "data": {
+          "sleep_absence_delay": "Sleep absence delay",
+          "sleep_auto_off_when_vacant": "Turn off Sleep mode when room becomes vacant",
+          "sleep_lights": "Sleep lights",
+          "sleep_transition": "Enter-sleep transition",
+          "sleep_restore_transition": "Restore transition"
+        },
+        "data_description": {
+          "sleep_absence_delay": "While Sleep mode is on, this delay replaces the normal room absence delay. It starts only after every trigger and persistent presence sensor becomes inactive.",
+          "sleep_auto_off_when_vacant": "When enabled, the integration turns off its own room Sleep mode switch after the sleep absence delay expires and the room becomes vacant. When disabled, Sleep mode remains on but managed lights are switched off while the room is vacant.",
+          "sleep_lights": "Each selected light is configured on the following pages. When Sleep mode starts, only lights that receive a command are saved for later restoration: configured sleep lights and currently-on lights that must be switched off.",
+          "sleep_transition": "Transition used to move changed lights from their current state to the configured sleep profile.",
+          "sleep_restore_transition": "Transition used to restore only the light states saved before Sleep mode."
+        }
+      },
+      "sleep_light": {
+        "title": "Sleep profile: {light_name}",
+        "description": "Configure {light_name} (`{entity_id}`), light {position} of {total}. The RGB picker and color-temperature control are both shown; only the value selected by Color behavior is applied.",
+        "data": {
+          "on": "Keep this light on",
+          "brightness": "Sleep brightness",
+          "color_mode": "Color behavior",
+          "rgb_color": "Sleep color",
+          "color_temp_kelvin": "Sleep color temperature"
+        },
+        "data_description": {
+          "on": "When disabled, this light is switched off during Sleep mode. Its previous state is saved only when the light is actually on and therefore changed.",
+          "brightness": "Brightness applied while sleep mode is active. Ignored when the light is configured off.",
+          "color_mode": "Keep current changes only brightness; RGB applies the selected color; Color temperature applies the selected Kelvin value.",
+          "rgb_color": "Graphical RGB color picker. Used only when Color behavior is RGB color.",
+          "color_temp_kelvin": "White color temperature. Used only when Color behavior is Color temperature. Unsupported capabilities are ignored by the light integration."
+        }
+      }
+    }
+  },
+  "selector": {
+    "sleep_color_mode": {
+      "options": {
+        "keep": "Keep current color",
+        "rgb": "RGB color",
+        "color_temp": "Color temperature"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "presence": {
+        "name": "Presence"
+      },
+      "light_needed": {
+        "name": "Light needed"
+      }
+    },
+    "sensor": {
+      "presence_reason": {
+        "name": "Presence reason"
+      },
+      "light_reason": {
+        "name": "Lighting reason"
+      },
+      "sleep_reason": {
+        "name": "Sleep reason"
+      },
+      "period": {
+        "name": "Period"
+      },
+      "stored_natural_lux": {
+        "name": "Stored natural illuminance"
+      }
+    },
+    "switch": {
+      "automation": {
+        "name": "Automation"
+      },
+      "sleep_mode": {
+        "name": "Sleep mode"
+      }
+    },
+    "number": {
+      "absence_delay": {
+        "name": "Absence delay"
+      },
+      "lux_threshold": {
+        "name": "Illuminance threshold"
+      },
+      "sleep_absence_delay": {
+        "name": "Sleep absence delay"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode"
+      }
+    }
+  }
+}
