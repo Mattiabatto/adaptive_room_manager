@@ -65,6 +65,16 @@ actions:
 
 Use the reverse state and `switch.turn_off` to leave Sleep mode.
 
+## Period transition synchronization
+
+Each room has three independent options for entering Day, Evening and Night.
+When an option is enabled, Adaptive Room Manager synchronizes managed lights at
+the exact configured boundary: lights outside the new profile are switched off
+and missing lights in the new profile are switched on when the room is occupied
+and artificial light is needed. When an option is disabled, lights retained from
+the previous period are not switched off merely because the period changed.
+
+
 ## Sleep absence delay
 
 Sleep mode no longer forces occupancy. It replaces only the vacancy timer.
@@ -157,3 +167,11 @@ Review the Sleep mode options after upgrading because the migrated timeout now r
 ## License
 
 MIT License. Copyright Mattia Batto.
+
+## One-shot lighting per occupancy cycle
+
+When a vacant room becomes occupied and lighting is needed, Adaptive Room Manager applies the current Day, Evening or Night profile once. It does not continuously maintain that profile.
+
+If a user switches off one of those lights while the room remains occupied, the integration leaves it off during later presence, lux, cover and light-state updates. The lighting cycle resets only after all presence is lost, the applicable absence delay expires, and the room becomes vacant. On the next valid occupancy activation, the current profile can be applied again.
+
+An enabled period-transition synchronization option is an intentional exception: entering Day, Evening or Night may synchronize the newly selected profile. Sleep Mode also retains its own explicit enter/exit behavior.
