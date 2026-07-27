@@ -12,7 +12,7 @@
       },
       "home": {
         "title": "Home Settings",
-        "description": "Configure the default timing and lighting values offered when new rooms are added. Every room can override these values later from its settings menu.",
+        "description": "Configure the global day, evening, and night schedule. Illuminance threshold and absence delay are used as defaults when new rooms are added.",
         "data": {
           "evening_start": "Default evening start",
           "night_start": "Default night start",
@@ -33,9 +33,6 @@
           "day_lights": "Day lights",
           "evening_lights": "Evening lights",
           "night_lights": "Night lights",
-          "evening_start": "Evening starts",
-          "night_start": "Night starts",
-          "morning_start": "Morning starts",
           "lux_threshold": "Illuminance threshold",
           "absence_delay": "Absence delay"
         },
@@ -58,7 +55,7 @@
     "step": {
       "init": {
         "title": "Adaptive Room Manager settings",
-        "description": "Change the settings for this entry. Home Settings define defaults for newly added rooms; room settings apply only to that room.",
+        "description": "Change the settings for this entry. Home Settings contain the global schedule; room settings contain only room-specific sensors, lights, threshold, and delay.",
         "data": {
           "temporary_presence": "Temporary presence sources",
           "persistent_presence": "Persistent presence sources",
@@ -67,9 +64,6 @@
           "day_lights": "Day lights",
           "evening_lights": "Evening lights",
           "night_lights": "Night lights",
-          "evening_start": "Evening starts",
-          "night_start": "Night starts",
-          "morning_start": "Morning starts",
           "lux_threshold": "Illuminance threshold",
           "absence_delay": "Absence delay"
         }
@@ -78,20 +72,44 @@
   },
   "entity": {
     "binary_sensor": {
-      "presence": {"name": "Presence"},
-      "light_needed": {"name": "Light needed"}
+      "presence": {
+        "name": "Presence"
+      },
+      "light_needed": {
+        "name": "Light needed"
+      }
     },
     "sensor": {
-      "presence_reason": {"name": "Presence reason"},
-      "light_reason": {"name": "Lighting reason"},
-      "period": {"name": "Period"},
-      "stored_natural_lux": {"name": "Stored natural illuminance"}
+      "presence_reason": {
+        "name": "Presence reason"
+      },
+      "light_reason": {
+        "name": "Lighting reason"
+      },
+      "period": {
+        "name": "Period"
+      },
+      "stored_natural_lux": {
+        "name": "Stored natural illuminance"
+      }
     },
-    "switch": {"automation": {"name": "Automation"}},
+    "switch": {
+      "automation": {
+        "name": "Automation"
+      }
+    },
     "number": {
-      "absence_delay": {"name": "Absence delay"},
-      "lux_threshold": {"name": "Illuminance threshold"}
+      "absence_delay": {
+        "name": "Absence delay"
+      },
+      "lux_threshold": {
+        "name": "Illuminance threshold"
+      }
     },
-    "select": {"mode": {"name": "Mode"}}
+    "select": {
+      "mode": {
+        "name": "Mode"
+      }
+    }
   }
 }

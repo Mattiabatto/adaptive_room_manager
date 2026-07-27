@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Removed morning, evening, and night schedule fields from room creation and room options.
+- Made every room read the schedule exclusively from the global Home Settings entry.
+- Kept illuminance threshold and absence delay configurable per room.
+- Existing 0.3.0 room entries remain compatible; legacy room schedule values are ignored.
+
 ## 0.3.0
 
 - Added a config-flow menu for **Home Settings** and **Room** entries.

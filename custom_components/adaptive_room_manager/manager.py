@@ -34,6 +34,9 @@ from .const import (
     DEFAULT_LUX_THRESHOLD,
     DEFAULT_MORNING_START,
     DEFAULT_NIGHT_START,
+    DOMAIN,
+    CONF_ENTRY_TYPE,
+    ENTRY_TYPE_HOME,
 )
 
 
@@ -60,6 +63,15 @@ class RoomManager:
     @property
     def config(self) -> dict:
         return {**self.entry.data, **self.entry.options}
+
+
+    @property
+    def home_config(self) -> dict:
+        """Return the global Home Settings configuration."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_HOME:
+                return {**entry.data, **entry.options}
+        return {}
 
     @property
     def area_id(self) -> str:
@@ -144,9 +156,10 @@ class RoomManager:
         if self.mode.startswith("force_"):
             return self.mode.removeprefix("force_")
         now = datetime.now().time()
-        morning = time.fromisoformat(self.config.get(CONF_MORNING_START, DEFAULT_MORNING_START))
-        evening = time.fromisoformat(self.config.get(CONF_EVENING_START, DEFAULT_EVENING_START))
-        night = time.fromisoformat(self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START))
+        home = self.home_config
+        morning = time.fromisoformat(home.get(CONF_MORNING_START, DEFAULT_MORNING_START))
+        evening = time.fromisoformat(home.get(CONF_EVENING_START, DEFAULT_EVENING_START))
+        night = time.fromisoformat(home.get(CONF_NIGHT_START, DEFAULT_NIGHT_START))
         if now >= night or now < morning:
             return "night"
         if now >= evening:

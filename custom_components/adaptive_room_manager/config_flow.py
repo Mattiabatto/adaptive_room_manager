@@ -36,7 +36,7 @@ from .const import (
 )
 
 
-def _timing_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
+def _home_settings_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
     return {
         vol.Required(
             CONF_EVENING_START,
@@ -79,7 +79,7 @@ def _timing_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
 
 def _home_schema(defaults: dict[str, Any]) -> vol.Schema:
     """Return the schema for defaults used when new rooms are created."""
-    return vol.Schema(_timing_schema(defaults))
+    return vol.Schema(_home_settings_schema(defaults))
 
 
 def _room_schema(defaults: dict[str, Any], *, include_area: bool) -> vol.Schema:
@@ -120,7 +120,34 @@ def _room_schema(defaults: dict[str, Any], *, include_area: bool) -> vol.Schema:
             ),
         }
     )
-    fields.update(_timing_schema(defaults))
+    fields.update(
+        {
+            vol.Required(
+                CONF_LUX_THRESHOLD,
+                default=defaults.get(CONF_LUX_THRESHOLD, DEFAULT_LUX_THRESHOLD),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=2000,
+                    step=1,
+                    unit_of_measurement="lx",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Required(
+                CONF_ABSENCE_DELAY,
+                default=defaults.get(CONF_ABSENCE_DELAY, DEFAULT_ABSENCE_DELAY),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=7200,
+                    step=10,
+                    unit_of_measurement="s",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
     return vol.Schema(fields)
 
 
