@@ -77,7 +77,7 @@ the previous period are not switched off merely because the period changed.
 
 ## Sleep absence delay
 
-Sleep mode no longer forces occupancy. It replaces only the vacancy timer.
+Sleep mode replaces only the vacancy timer.
 
 Example:
 
